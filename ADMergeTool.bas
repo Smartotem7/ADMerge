@@ -1,4 +1,5 @@
 Attribute VB_Name = "ADMergeTool"
+
 Option Explicit
 
 Private Const DIFF_SHEET_NAME As String = "diff"
@@ -19,14 +20,14 @@ Private Const CONFIG_KEY_DIFF_ERROR_COLUMN As String = "DiffErrorColumn"
 
 ' Entry point for the first button on the VBA tool workbook.
 ' Assign a Form Control or ActiveX button to this macro.
-Public Sub RunADMerge()
-    RunADMergeWithConfig CreateADMergeConfig(), "AD Merge"
+Public Sub RunAAMerge()
+    RunADMergeWithConfig CreateAAMergeConfig(), "AA Merge"
 End Sub
 
 ' Entry point for the second button on the VBA tool workbook.
 ' Assign a Form Control or ActiveX button to this macro.
-Public Sub RunADMerge2()
-    RunADMergeWithConfig CreateADMergeConfig2(), "AD Merge 2"
+Public Sub RunADMerge()
+    RunADMergeWithConfig CreateADMergeConfig(), "AD Merge"
 End Sub
 
 Private Sub RunADMergeWithConfig(ByVal mergeConfig As Object, ByVal dialogTitle As String)
@@ -129,7 +130,7 @@ HandleError:
     MsgBox "AD merge stopped: " & Err.Description, vbCritical, dialogTitle
 End Sub
 
-Private Function CreateADMergeConfig() As Object
+Private Function CreateAAMergeConfig() As Object
     Dim mergeConfig As Object
 
     Set mergeConfig = CreateObject("Scripting.Dictionary")
@@ -142,31 +143,31 @@ Private Function CreateADMergeConfig() As Object
     mergeConfig.Add CONFIG_KEY_SOURCE_MERGE_COLUMNS, Array("Q", "R", "Y")
     mergeConfig.Add CONFIG_KEY_TARGET_MERGE_COLUMNS, Array("P", "Q", "X")
     mergeConfig.Add CONFIG_KEY_DIFF_COLUMNS, Array("A", "B", "C", "D", "E", "F")
-    mergeConfig.Add CONFIG_KEY_DIFF_HEADERS, Array("Target Row", "Target E", "Target P After", "Target Q After", "Target X After", "Error")
+    mergeConfig.Add CONFIG_KEY_DIFF_HEADERS, Array("#", "Target E", "Target P After", "Target Q After", "Target X After", "Error")
     mergeConfig.Add CONFIG_KEY_DIFF_CHANGED_COLUMNS, Array("C", "D", "E")
     mergeConfig.Add CONFIG_KEY_DIFF_ERROR_COLUMN, "F"
 
-    Set CreateADMergeConfig = mergeConfig
+    Set CreateAAMergeConfig = mergeConfig
 End Function
 
-Private Function CreateADMergeConfig2() As Object
+Private Function CreateADMergeConfig() As Object
     Dim mergeConfig As Object
 
     Set mergeConfig = CreateObject("Scripting.Dictionary")
     mergeConfig.CompareMode = vbTextCompare
     mergeConfig.Add CONFIG_KEY_SHEET_NAME, "Sheet1"
-    mergeConfig.Add CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL, "B3"
-    mergeConfig.Add CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL, "B4"
+    mergeConfig.Add CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL, "B6"
+    mergeConfig.Add CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL, "B7"
     mergeConfig.Add CONFIG_KEY_KEY_COLUMN, "E"
-    mergeConfig.Add CONFIG_KEY_STATUS_COLUMN, "O"
-    mergeConfig.Add CONFIG_KEY_SOURCE_MERGE_COLUMNS, Array("Q", "R", "Y")
-    mergeConfig.Add CONFIG_KEY_TARGET_MERGE_COLUMNS, Array("P", "Q", "X")
+    mergeConfig.Add CONFIG_KEY_STATUS_COLUMN, "N"
+    mergeConfig.Add CONFIG_KEY_SOURCE_MERGE_COLUMNS, Array("P", "Q", "X")
+    mergeConfig.Add CONFIG_KEY_TARGET_MERGE_COLUMNS, Array("O", "P", "W")
     mergeConfig.Add CONFIG_KEY_DIFF_COLUMNS, Array("A", "B", "C", "D", "E", "F")
-    mergeConfig.Add CONFIG_KEY_DIFF_HEADERS, Array("Target Row", "Target E", "Target P After", "Target Q After", "Target X After", "Error")
+    mergeConfig.Add CONFIG_KEY_DIFF_HEADERS, Array("#", "Target E", "Target O After", "Target P After", "Target W After", "Error")
     mergeConfig.Add CONFIG_KEY_DIFF_CHANGED_COLUMNS, Array("C", "D", "E")
     mergeConfig.Add CONFIG_KEY_DIFF_ERROR_COLUMN, "F"
 
-    Set CreateADMergeConfig2 = mergeConfig
+    Set CreateADMergeConfig = mergeConfig
 End Function
 
 Private Sub RestoreApplicationSettings(ByVal originalCalculation As XlCalculation, ByVal settingsChanged As Boolean)
