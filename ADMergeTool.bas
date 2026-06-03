@@ -26,8 +26,8 @@ Public Sub RunADMerge()
     Dim matchedRows As Long
     Dim keyValue As String
     Dim sourceRow As Long
-    Dim sourceN As String
-    Dim targetN As String
+    Dim sourceO As String
+    Dim targetO As String
     Dim shouldMerge As Boolean
     Dim hasChange As Boolean
     Dim errorMessage As String
@@ -36,12 +36,6 @@ Public Sub RunADMerge()
 
     On Error GoTo HandleError
 
-    sourcePath = PickExcelFile("Select the source file")
-    If sourcePath = False Then Exit Sub
-
-    targetPath = PickExcelFile("Select the target file")
-    If targetPath = False Then Exit Sub
-
     originalCalculation = Application.Calculation
     Application.ScreenUpdating = False
     Application.EnableEvents = False
@@ -49,8 +43,8 @@ Public Sub RunADMerge()
     settingsChanged = True
 
     Set diffSheet = PrepareDiffSheet(ThisWorkbook)
-    Set sourceWorkbook = Workbooks.Open(CStr(sourcePath), ReadOnly:=True)
-    Set targetWorkbook = Workbooks.Open(CStr(targetPath))
+    Set sourceWorkbook = Workbooks("基本設計書マージ対象進行管理表_0602_0930.xlsx")
+    Set targetWorkbook = Workbooks("基本設計書マージ対象進行管理表.xlsx")
     Set sourceSheet = GetRequiredSheet(sourceWorkbook, SHEET_NAME)
     Set targetSheet = GetRequiredSheet(targetWorkbook, SHEET_NAME)
     Set sourceRowsByKey = BuildSourceIndex(sourceSheet)
@@ -63,18 +57,18 @@ Public Sub RunADMerge()
         If Len(keyValue) > 0 And sourceRowsByKey.Exists(keyValue) Then
             matchedRows = matchedRows + 1
             sourceRow = CLng(sourceRowsByKey(keyValue))
-            sourceN = NormalizeNValue(sourceSheet.Cells(sourceRow, "N").Value)
-            targetN = NormalizeNValue(targetSheet.Cells(targetRow, "N").Value)
+            sourceO = NormalizeNValue(sourceSheet.Cells(sourceRow, "O").Value)
+            targetO = NormalizeNValue(targetSheet.Cells(targetRow, "O").Value)
             shouldMerge = False
             errorMessage = vbNullString
 
-            If sourceN = "BBX" And targetN = "BBX" Then
+            If sourceO = "BBX" And targetO = "BBX" Then
                 shouldMerge = True
-            ElseIf sourceN = vbNullString And targetN = "BBX" Then
+            ElseIf sourceO = vbNullString And targetO = "BBX" Then
                 shouldMerge = True
-            ElseIf sourceN = "BBX" And targetN = vbNullString Then
+            ElseIf sourceO = "BBX" And targetO = vbNullString Then
                 errorMessage = "Error: source N is BBX, but target N is blank."
-            ElseIf sourceN = vbNullString And targetN = vbNullString Then
+            ElseIf sourceO = vbNullString And targetO = vbNullString Then
                 ' Skip this row.
             End If
 
@@ -134,11 +128,6 @@ End Function
 
 Private Function GetRequiredSheet(ByVal workbookToCheck As Workbook, ByVal requiredName As String) As Worksheet
     On Error GoTo MissingSheet
-
-    If workbookToCheck.Worksheets.Count <> 1 Then
-        Err.Raise vbObjectError + 1002, "ADMergeTool", _
-                  "Workbook '" & workbookToCheck.Name & "' must contain only one worksheet named '" & requiredName & "'."
-    End If
 
     Set GetRequiredSheet = workbookToCheck.Worksheets(requiredName)
     Exit Function
