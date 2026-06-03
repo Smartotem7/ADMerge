@@ -2,7 +2,6 @@ Attribute VB_Name = "ADMergeTool"
 
 Option Explicit
 
-Private Const DIFF_SHEET_NAME As String = "diff"
 Private Const HEADER_ROW As Long = 1
 Private Const FIRST_DATA_ROW As Long = 2
 Private Const COLOR_YELLOW As Long = vbYellow
@@ -13,6 +12,7 @@ Private Const CONFIG_KEY_KEY_COLUMN As String = "KeyColumn"
 Private Const CONFIG_KEY_STATUS_COLUMN As String = "StatusColumn"
 Private Const CONFIG_KEY_SOURCE_MERGE_COLUMNS As String = "SourceMergeColumns"
 Private Const CONFIG_KEY_TARGET_MERGE_COLUMNS As String = "TargetMergeColumns"
+Private Const CONFIG_KEY_DIFF_SHEET_NAME As String = "DiffSheetName"
 Private Const CONFIG_KEY_DIFF_COLUMNS As String = "DiffColumns"
 Private Const CONFIG_KEY_DIFF_HEADERS As String = "DiffHeaders"
 Private Const CONFIG_KEY_DIFF_CHANGED_COLUMNS As String = "DiffChangedColumns"
@@ -116,11 +116,11 @@ Private Sub RunADMergeWithConfig(ByVal mergeConfig As Object, ByVal dialogTitle 
 
     RestoreApplicationSettings originalCalculation, settingsChanged
 
-    MsgBox "AD merge completed." & vbCrLf & _
+    MsgBox dialogTitle & " completed." & vbCrLf & _
            "Matched target rows: " & matchedRows & vbCrLf & _
            "Rows with changed values: " & changedRows & vbCrLf & _
            "Rows with errors: " & errorRows & vbCrLf & vbCrLf & _
-           "Review the diff sheet in this VBA tool workbook." & vbCrLf & _
+           "Review the " & mergeConfig(CONFIG_KEY_DIFF_SHEET_NAME) & " sheet in this VBA tool workbook." & vbCrLf & _
            "The target workbook remains open; save it if the result is correct.", _
            vbInformation, dialogTitle
     Exit Sub
@@ -138,6 +138,7 @@ Private Function CreateAAMergeConfig() As Object
     mergeConfig.Add CONFIG_KEY_SHEET_NAME, "Sheet1"
     mergeConfig.Add CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL, "B1"
     mergeConfig.Add CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL, "B2"
+    mergeConfig.Add CONFIG_KEY_DIFF_SHEET_NAME, "diffAA"
     mergeConfig.Add CONFIG_KEY_KEY_COLUMN, "E"
     mergeConfig.Add CONFIG_KEY_STATUS_COLUMN, "O"
     mergeConfig.Add CONFIG_KEY_SOURCE_MERGE_COLUMNS, Array("Q", "R", "Y")
@@ -158,6 +159,7 @@ Private Function CreateADMergeConfig() As Object
     mergeConfig.Add CONFIG_KEY_SHEET_NAME, "Sheet1"
     mergeConfig.Add CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL, "B6"
     mergeConfig.Add CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL, "B7"
+    mergeConfig.Add CONFIG_KEY_DIFF_SHEET_NAME, "diffAD"
     mergeConfig.Add CONFIG_KEY_KEY_COLUMN, "E"
     mergeConfig.Add CONFIG_KEY_STATUS_COLUMN, "N"
     mergeConfig.Add CONFIG_KEY_SOURCE_MERGE_COLUMNS, Array("P", "Q", "X")
@@ -216,12 +218,12 @@ Private Function PrepareDiffSheet(ByVal toolWorkbook As Workbook, ByVal mergeCon
     Dim diffSheet As Worksheet
 
     On Error Resume Next
-    Set diffSheet = toolWorkbook.Worksheets(DIFF_SHEET_NAME)
+    Set diffSheet = toolWorkbook.Worksheets(mergeConfig(CONFIG_KEY_DIFF_SHEET_NAME))
     On Error GoTo 0
 
     If diffSheet Is Nothing Then
         Set diffSheet = toolWorkbook.Worksheets.Add(After:=toolWorkbook.Worksheets(toolWorkbook.Worksheets.Count))
-        diffSheet.Name = DIFF_SHEET_NAME
+        diffSheet.Name = mergeConfig(CONFIG_KEY_DIFF_SHEET_NAME)
     End If
 
     diffSheet.Cells.Clear
