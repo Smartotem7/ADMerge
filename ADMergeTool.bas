@@ -17,10 +17,19 @@ Private Const CONFIG_KEY_DIFF_HEADERS As String = "DiffHeaders"
 Private Const CONFIG_KEY_DIFF_CHANGED_COLUMNS As String = "DiffChangedColumns"
 Private Const CONFIG_KEY_DIFF_ERROR_COLUMN As String = "DiffErrorColumn"
 
-' Entry point for the button on the VBA tool workbook.
+' Entry point for the first button on the VBA tool workbook.
 ' Assign a Form Control or ActiveX button to this macro.
 Public Sub RunADMerge()
-    Dim mergeConfig As Object
+    RunADMergeWithConfig CreateADMergeConfig(), "AD Merge"
+End Sub
+
+' Entry point for the second button on the VBA tool workbook.
+' Assign a Form Control or ActiveX button to this macro.
+Public Sub RunADMerge2()
+    RunADMergeWithConfig CreateADMergeConfig2(), "AD Merge 2"
+End Sub
+
+Private Sub RunADMergeWithConfig(ByVal mergeConfig As Object, ByVal dialogTitle As String)
     Dim toolConfigSheet As Worksheet
     Dim sourceWorkbookName As String
     Dim targetWorkbookName As String
@@ -48,7 +57,6 @@ Public Sub RunADMerge()
 
     On Error GoTo HandleError
 
-    Set mergeConfig = CreateADMergeConfig()
     Set toolConfigSheet = GetToolConfigSheet(ThisWorkbook)
     sourceWorkbookName = ReadRequiredTextCell(toolConfigSheet, mergeConfig(CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL), "source workbook name")
     targetWorkbookName = ReadRequiredTextCell(toolConfigSheet, mergeConfig(CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL), "target workbook name")
@@ -113,12 +121,12 @@ Public Sub RunADMerge()
            "Rows with errors: " & errorRows & vbCrLf & vbCrLf & _
            "Review the diff sheet in this VBA tool workbook." & vbCrLf & _
            "The target workbook remains open; save it if the result is correct.", _
-           vbInformation, "AD Merge"
+           vbInformation, dialogTitle
     Exit Sub
 
 HandleError:
     RestoreApplicationSettings originalCalculation, settingsChanged
-    MsgBox "AD merge stopped: " & Err.Description, vbCritical, "AD Merge"
+    MsgBox "AD merge stopped: " & Err.Description, vbCritical, dialogTitle
 End Sub
 
 Private Function CreateADMergeConfig() As Object
@@ -139,6 +147,26 @@ Private Function CreateADMergeConfig() As Object
     mergeConfig.Add CONFIG_KEY_DIFF_ERROR_COLUMN, "F"
 
     Set CreateADMergeConfig = mergeConfig
+End Function
+
+Private Function CreateADMergeConfig2() As Object
+    Dim mergeConfig As Object
+
+    Set mergeConfig = CreateObject("Scripting.Dictionary")
+    mergeConfig.CompareMode = vbTextCompare
+    mergeConfig.Add CONFIG_KEY_SHEET_NAME, "Sheet1"
+    mergeConfig.Add CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL, "B3"
+    mergeConfig.Add CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL, "B4"
+    mergeConfig.Add CONFIG_KEY_KEY_COLUMN, "E"
+    mergeConfig.Add CONFIG_KEY_STATUS_COLUMN, "O"
+    mergeConfig.Add CONFIG_KEY_SOURCE_MERGE_COLUMNS, Array("Q", "R", "Y")
+    mergeConfig.Add CONFIG_KEY_TARGET_MERGE_COLUMNS, Array("P", "Q", "X")
+    mergeConfig.Add CONFIG_KEY_DIFF_COLUMNS, Array("A", "B", "C", "D", "E", "F")
+    mergeConfig.Add CONFIG_KEY_DIFF_HEADERS, Array("Target Row", "Target E", "Target P After", "Target Q After", "Target X After", "Error")
+    mergeConfig.Add CONFIG_KEY_DIFF_CHANGED_COLUMNS, Array("C", "D", "E")
+    mergeConfig.Add CONFIG_KEY_DIFF_ERROR_COLUMN, "F"
+
+    Set CreateADMergeConfig2 = mergeConfig
 End Function
 
 Private Sub RestoreApplicationSettings(ByVal originalCalculation As XlCalculation, ByVal settingsChanged As Boolean)
