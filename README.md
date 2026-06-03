@@ -6,23 +6,36 @@ This repository contains a VBA module for an Excel macro-enabled workbook that m
 
 1. Create or open an Excel macro-enabled workbook (`.xlsm`) that will be the VBA tool workbook.
 2. Import `ADMergeTool.bas` into the workbook's VBA project.
-3. Add a button to the workbook and assign the `RunADMerge` macro to the button.
+3. Add a button to the workbook and assign the `RunADMerge` macro to the button. Optionally add a second button and assign the `RunADMerge2` macro to run the second merge configuration.
 4. Open both the source workbook and target workbook in Excel before running the macro.
-5. In the first worksheet of the tool workbook, enter the source workbook file name in cell `B1` and the target workbook file name in cell `B2`.
-6. Click the button to run the merge.
+5. In the first worksheet of the tool workbook, enter the first source workbook file name in cell `B1` and the first target workbook file name in cell `B2`. For the second button, enter the second source workbook file name in cell `B3` and the second target workbook file name in cell `B4`.
+6. Click the desired button to run that merge.
 7. Review the `diff` sheet in the VBA tool workbook.
 8. Review and save the target workbook if the merge result is correct.
 
 ## Merge configuration
 
-All workbook name cells and column positions are centralized in `CreateADMergeConfig` in `ADMergeTool.bas`. Copy that function and adjust the configured values when adding another merge flow for files whose columns are in different positions.
+Workbook name cells and column positions are centralized in `CreateADMergeConfig` and `CreateADMergeConfig2` in `ADMergeTool.bas`. The `RunADMerge` macro uses `CreateADMergeConfig`, and the `RunADMerge2` macro uses `CreateADMergeConfig2`. Adjust the configured values when adding another merge flow for files whose columns are in different positions.
 
-Current configuration:
+Current first-button configuration:
 
 | Setting | Value |
 | --- | --- |
 | Source workbook name cell | `B1` in the first worksheet of the tool workbook |
 | Target workbook name cell | `B2` in the first worksheet of the tool workbook |
+| Data worksheet name | `Sheet1` |
+| Matching key column | `E` in both workbooks |
+| Status column | `O` in both workbooks |
+| Source merge columns | `Q`, `R`, `Y` |
+| Target merge columns | `P`, `Q`, `X` |
+| Diff output columns | `A:F` |
+
+Current second-button configuration:
+
+| Setting | Value |
+| --- | --- |
+| Source workbook name cell | `B3` in the first worksheet of the tool workbook |
+| Target workbook name cell | `B4` in the first worksheet of the tool workbook |
 | Data worksheet name | `Sheet1` |
 | Matching key column | `E` in both workbooks |
 | Status column | `O` in both workbooks |
