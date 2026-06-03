@@ -1,17 +1,29 @@
 Attribute VB_Name = "ADMergeTool"
 Option Explicit
 
-Private Const SHEET_NAME As String = "Sheet1"
 Private Const DIFF_SHEET_NAME As String = "diff"
 Private Const HEADER_ROW As Long = 1
 Private Const FIRST_DATA_ROW As Long = 2
 Private Const COLOR_YELLOW As Long = vbYellow
+Private Const CONFIG_KEY_SHEET_NAME As String = "SheetName"
+Private Const CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL As String = "SourceWorkbookNameCell"
+Private Const CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL As String = "TargetWorkbookNameCell"
+Private Const CONFIG_KEY_KEY_COLUMN As String = "KeyColumn"
+Private Const CONFIG_KEY_STATUS_COLUMN As String = "StatusColumn"
+Private Const CONFIG_KEY_SOURCE_MERGE_COLUMNS As String = "SourceMergeColumns"
+Private Const CONFIG_KEY_TARGET_MERGE_COLUMNS As String = "TargetMergeColumns"
+Private Const CONFIG_KEY_DIFF_COLUMNS As String = "DiffColumns"
+Private Const CONFIG_KEY_DIFF_HEADERS As String = "DiffHeaders"
+Private Const CONFIG_KEY_DIFF_CHANGED_COLUMNS As String = "DiffChangedColumns"
+Private Const CONFIG_KEY_DIFF_ERROR_COLUMN As String = "DiffErrorColumn"
 
 ' Entry point for the button on the VBA tool workbook.
 ' Assign a Form Control or ActiveX button to this macro.
 Public Sub RunADMerge()
-    Dim sourcePath As Variant
-    Dim targetPath As Variant
+    Dim mergeConfig As Object
+    Dim toolConfigSheet As Worksheet
+    Dim sourceWorkbookName As String
+    Dim targetWorkbookName As String
     Dim sourceWorkbook As Workbook
     Dim targetWorkbook As Workbook
     Dim sourceSheet As Worksheet
@@ -26,8 +38,8 @@ Public Sub RunADMerge()
     Dim matchedRows As Long
     Dim keyValue As String
     Dim sourceRow As Long
-    Dim sourceO As String
-    Dim targetO As String
+    Dim sourceStatus As String
+    Dim targetStatus As String
     Dim shouldMerge As Boolean
     Dim hasChange As Boolean
     Dim errorMessage As String
@@ -36,57 +48,62 @@ Public Sub RunADMerge()
 
     On Error GoTo HandleError
 
+    Set mergeConfig = CreateADMergeConfig()
+    Set toolConfigSheet = GetToolConfigSheet(ThisWorkbook)
+    sourceWorkbookName = ReadRequiredTextCell(toolConfigSheet, mergeConfig(CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL), "source workbook name")
+    targetWorkbookName = ReadRequiredTextCell(toolConfigSheet, mergeConfig(CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL), "target workbook name")
+
     originalCalculation = Application.Calculation
     Application.ScreenUpdating = False
     Application.EnableEvents = False
     Application.Calculation = xlCalculationManual
     settingsChanged = True
 
-    Set diffSheet = PrepareDiffSheet(ThisWorkbook)
-    Set sourceWorkbook = Workbooks("基本設計書マージ対象進行管理表_0602_0930.xlsx")
-    Set targetWorkbook = Workbooks("基本設計書マージ対象進行管理表.xlsx")
-    Set sourceSheet = GetRequiredSheet(sourceWorkbook, SHEET_NAME)
-    Set targetSheet = GetRequiredSheet(targetWorkbook, SHEET_NAME)
-    Set sourceRowsByKey = BuildSourceIndex(sourceSheet)
+    Set diffSheet = PrepareDiffSheet(ThisWorkbook, mergeConfig)
+    Set sourceWorkbook = GetOpenWorkbook(sourceWorkbookName)
+    Set targetWorkbook = GetOpenWorkbook(targetWorkbookName)
+    Set sourceSheet = GetRequiredSheet(sourceWorkbook, mergeConfig(CONFIG_KEY_SHEET_NAME))
+    Set targetSheet = GetRequiredSheet(targetWorkbook, mergeConfig(CONFIG_KEY_SHEET_NAME))
+    Set sourceRowsByKey = BuildSourceIndex(sourceSheet, mergeConfig)
 
-    targetLastRow = LastUsedRow(targetSheet, "E")
+    targetLastRow = LastUsedRow(targetSheet, mergeConfig(CONFIG_KEY_KEY_COLUMN))
     diffRow = 2
 
     For targetRow = FIRST_DATA_ROW To targetLastRow
-        keyValue = NormalizeKey(targetSheet.Cells(targetRow, "E").Value)
+        keyValue = NormalizeKey(targetSheet.Cells(targetRow, mergeConfig(CONFIG_KEY_KEY_COLUMN)).Value)
         If Len(keyValue) > 0 And sourceRowsByKey.Exists(keyValue) Then
             matchedRows = matchedRows + 1
             sourceRow = CLng(sourceRowsByKey(keyValue))
-            sourceO = NormalizeNValue(sourceSheet.Cells(sourceRow, "O").Value)
-            targetO = NormalizeNValue(targetSheet.Cells(targetRow, "O").Value)
+            sourceStatus = NormalizeStatusValue(sourceSheet.Cells(sourceRow, mergeConfig(CONFIG_KEY_STATUS_COLUMN)).Value)
+            targetStatus = NormalizeStatusValue(targetSheet.Cells(targetRow, mergeConfig(CONFIG_KEY_STATUS_COLUMN)).Value)
             shouldMerge = False
             errorMessage = vbNullString
 
-            If sourceO = "BBX" And targetO = "BBX" Then
+            If sourceStatus = "BBX" And targetStatus = "BBX" Then
                 shouldMerge = True
-            ElseIf sourceO = vbNullString And targetO = "BBX" Then
+            ElseIf sourceStatus = vbNullString And targetStatus = "BBX" Then
                 shouldMerge = True
-            ElseIf sourceO = "BBX" And targetO = vbNullString Then
-                errorMessage = "Error: source N is BBX, but target N is blank."
-            ElseIf sourceO = vbNullString And targetO = vbNullString Then
+            ElseIf sourceStatus = "BBX" And targetStatus = vbNullString Then
+                errorMessage = "Error: source " & mergeConfig(CONFIG_KEY_STATUS_COLUMN) & " is BBX, but target " & mergeConfig(CONFIG_KEY_STATUS_COLUMN) & " is blank."
+            ElseIf sourceStatus = vbNullString And targetStatus = vbNullString Then
                 ' Skip this row.
             End If
 
             If shouldMerge Then
-                hasChange = ApplyMergeAndWriteDiff(sourceSheet, sourceRow, targetSheet, targetRow, diffSheet, diffRow)
+                hasChange = ApplyMergeAndWriteDiff(sourceSheet, sourceRow, targetSheet, targetRow, diffSheet, diffRow, mergeConfig)
                 If hasChange Then
                     changedRows = changedRows + 1
                     diffRow = diffRow + 1
                 End If
             ElseIf Len(errorMessage) > 0 Then
-                WriteErrorDiff targetSheet, targetRow, diffSheet, diffRow, errorMessage
+                WriteErrorDiff targetSheet, targetRow, diffSheet, diffRow, errorMessage, mergeConfig
                 errorRows = errorRows + 1
                 diffRow = diffRow + 1
             End If
         End If
     Next targetRow
 
-    FormatDiffSheet diffSheet
+    FormatDiffSheet diffSheet, mergeConfig
 
     RestoreApplicationSettings originalCalculation, settingsChanged
 
@@ -104,6 +121,26 @@ HandleError:
     MsgBox "AD merge stopped: " & Err.Description, vbCritical, "AD Merge"
 End Sub
 
+Private Function CreateADMergeConfig() As Object
+    Dim mergeConfig As Object
+
+    Set mergeConfig = CreateObject("Scripting.Dictionary")
+    mergeConfig.CompareMode = vbTextCompare
+    mergeConfig.Add CONFIG_KEY_SHEET_NAME, "Sheet1"
+    mergeConfig.Add CONFIG_KEY_SOURCE_WORKBOOK_NAME_CELL, "B1"
+    mergeConfig.Add CONFIG_KEY_TARGET_WORKBOOK_NAME_CELL, "B2"
+    mergeConfig.Add CONFIG_KEY_KEY_COLUMN, "E"
+    mergeConfig.Add CONFIG_KEY_STATUS_COLUMN, "O"
+    mergeConfig.Add CONFIG_KEY_SOURCE_MERGE_COLUMNS, Array("Q", "R", "Y")
+    mergeConfig.Add CONFIG_KEY_TARGET_MERGE_COLUMNS, Array("P", "Q", "X")
+    mergeConfig.Add CONFIG_KEY_DIFF_COLUMNS, Array("A", "B", "C", "D", "E", "F")
+    mergeConfig.Add CONFIG_KEY_DIFF_HEADERS, Array("Target Row", "Target E", "Target P After", "Target Q After", "Target X After", "Error")
+    mergeConfig.Add CONFIG_KEY_DIFF_CHANGED_COLUMNS, Array("C", "D", "E")
+    mergeConfig.Add CONFIG_KEY_DIFF_ERROR_COLUMN, "F"
+
+    Set CreateADMergeConfig = mergeConfig
+End Function
+
 Private Sub RestoreApplicationSettings(ByVal originalCalculation As XlCalculation, ByVal settingsChanged As Boolean)
     If settingsChanged Then
         Application.Calculation = originalCalculation
@@ -112,18 +149,27 @@ Private Sub RestoreApplicationSettings(ByVal originalCalculation As XlCalculatio
     End If
 End Sub
 
-Private Function PickExcelFile(ByVal dialogTitle As String) As Variant
-    With Application.FileDialog(msoFileDialogFilePicker)
-        .Title = dialogTitle
-        .AllowMultiSelect = False
-        .Filters.Clear
-        .Filters.Add "Excel files", "*.xlsx;*.xlsm;*.xlsb;*.xls"
-        If .Show <> -1 Then
-            PickExcelFile = False
-        Else
-            PickExcelFile = .SelectedItems(1)
-        End If
-    End With
+Private Function GetToolConfigSheet(ByVal toolWorkbook As Workbook) As Worksheet
+    Set GetToolConfigSheet = toolWorkbook.Worksheets(1)
+End Function
+
+Private Function ReadRequiredTextCell(ByVal worksheetToRead As Worksheet, ByVal cellAddress As String, ByVal valueDescription As String) As String
+    ReadRequiredTextCell = Trim$(CStr(worksheetToRead.Range(cellAddress).Value))
+    If Len(ReadRequiredTextCell) = 0 Then
+        Err.Raise vbObjectError + 1000, "ADMergeTool", _
+                  "Please enter the " & valueDescription & " in tool workbook cell " & cellAddress & "."
+    End If
+End Function
+
+Private Function GetOpenWorkbook(ByVal workbookName As String) As Workbook
+    On Error GoTo MissingWorkbook
+
+    Set GetOpenWorkbook = Workbooks(workbookName)
+    Exit Function
+
+MissingWorkbook:
+    Err.Raise vbObjectError + 1002, "ADMergeTool", _
+              "Workbook '" & workbookName & "' must already be open."
 End Function
 
 Private Function GetRequiredSheet(ByVal workbookToCheck As Workbook, ByVal requiredName As String) As Worksheet
@@ -137,7 +183,7 @@ MissingSheet:
               "Workbook '" & workbookToCheck.Name & "' must contain only one worksheet named '" & requiredName & "'."
 End Function
 
-Private Function PrepareDiffSheet(ByVal toolWorkbook As Workbook) As Worksheet
+Private Function PrepareDiffSheet(ByVal toolWorkbook As Workbook, ByVal mergeConfig As Object) As Worksheet
     Dim diffSheet As Worksheet
 
     On Error Resume Next
@@ -150,12 +196,26 @@ Private Function PrepareDiffSheet(ByVal toolWorkbook As Workbook) As Worksheet
     End If
 
     diffSheet.Cells.Clear
-    diffSheet.Range("A1:F1").Value = Array("Target Row", "Target E", "Target P After", "Target Q After", "Target X After", "Error")
-    diffSheet.Range("A1:F1").Font.Bold = True
+    WriteDiffHeaders diffSheet, mergeConfig
     Set PrepareDiffSheet = diffSheet
 End Function
 
-Private Function BuildSourceIndex(ByVal sourceSheet As Worksheet) As Object
+Private Sub WriteDiffHeaders(ByVal diffSheet As Worksheet, ByVal mergeConfig As Object)
+    Dim diffColumns As Variant
+    Dim diffHeaders As Variant
+    Dim columnIndex As Long
+
+    diffColumns = mergeConfig(CONFIG_KEY_DIFF_COLUMNS)
+    diffHeaders = mergeConfig(CONFIG_KEY_DIFF_HEADERS)
+
+    For columnIndex = LBound(diffColumns) To UBound(diffColumns)
+        diffSheet.Cells(HEADER_ROW, diffColumns(columnIndex)).Value = diffHeaders(columnIndex)
+    Next columnIndex
+
+    diffSheet.Range(diffColumns(LBound(diffColumns)) & HEADER_ROW & ":" & diffColumns(UBound(diffColumns)) & HEADER_ROW).Font.Bold = True
+End Sub
+
+Private Function BuildSourceIndex(ByVal sourceSheet As Worksheet, ByVal mergeConfig As Object) As Object
     Dim rowsByKey As Object
     Dim lastRow As Long
     Dim rowNumber As Long
@@ -163,10 +223,10 @@ Private Function BuildSourceIndex(ByVal sourceSheet As Worksheet) As Object
 
     Set rowsByKey = CreateObject("Scripting.Dictionary")
     rowsByKey.CompareMode = vbTextCompare
-    lastRow = LastUsedRow(sourceSheet, "E")
+    lastRow = LastUsedRow(sourceSheet, mergeConfig(CONFIG_KEY_KEY_COLUMN))
 
     For rowNumber = FIRST_DATA_ROW To lastRow
-        keyValue = NormalizeKey(sourceSheet.Cells(rowNumber, "E").Value)
+        keyValue = NormalizeKey(sourceSheet.Cells(rowNumber, mergeConfig(CONFIG_KEY_KEY_COLUMN)).Value)
         If Len(keyValue) > 0 And Not rowsByKey.Exists(keyValue) Then
             rowsByKey.Add keyValue, rowNumber
         End If
@@ -181,37 +241,40 @@ Private Function ApplyMergeAndWriteDiff( _
     ByVal targetSheet As Worksheet, _
     ByVal targetRow As Long, _
     ByVal diffSheet As Worksheet, _
-    ByVal diffRow As Long) As Boolean
+    ByVal diffRow As Long, _
+    ByVal mergeConfig As Object) As Boolean
 
-    Dim sourceQ As Variant
-    Dim sourceR As Variant
-    Dim sourceY As Variant
-    Dim pChanged As Boolean
-    Dim qChanged As Boolean
-    Dim xChanged As Boolean
+    Dim sourceMergeColumns As Variant
+    Dim targetMergeColumns As Variant
+    Dim diffChangedColumns As Variant
+    Dim sourceValues() As Variant
+    Dim changedColumns() As Boolean
+    Dim columnIndex As Long
+    Dim hasAnyChange As Boolean
 
-    sourceQ = sourceSheet.Cells(sourceRow, "Q").Value
-    sourceR = sourceSheet.Cells(sourceRow, "R").Value
-    sourceY = sourceSheet.Cells(sourceRow, "Y").Value
+    sourceMergeColumns = mergeConfig(CONFIG_KEY_SOURCE_MERGE_COLUMNS)
+    targetMergeColumns = mergeConfig(CONFIG_KEY_TARGET_MERGE_COLUMNS)
+    diffChangedColumns = mergeConfig(CONFIG_KEY_DIFF_CHANGED_COLUMNS)
+    ReDim sourceValues(LBound(sourceMergeColumns) To UBound(sourceMergeColumns))
+    ReDim changedColumns(LBound(sourceMergeColumns) To UBound(sourceMergeColumns))
 
-    pChanged = ValuesAreDifferent(targetSheet.Cells(targetRow, "P").Value, sourceQ)
-    qChanged = ValuesAreDifferent(targetSheet.Cells(targetRow, "Q").Value, sourceR)
-    xChanged = ValuesAreDifferent(targetSheet.Cells(targetRow, "X").Value, sourceY)
+    For columnIndex = LBound(sourceMergeColumns) To UBound(sourceMergeColumns)
+        sourceValues(columnIndex) = sourceSheet.Cells(sourceRow, sourceMergeColumns(columnIndex)).Value
+        changedColumns(columnIndex) = ValuesAreDifferent(targetSheet.Cells(targetRow, targetMergeColumns(columnIndex)).Value, sourceValues(columnIndex))
+        hasAnyChange = hasAnyChange Or changedColumns(columnIndex)
+    Next columnIndex
 
-    If pChanged Or qChanged Or xChanged Then
-        targetSheet.Cells(targetRow, "P").Value = sourceQ
-        targetSheet.Cells(targetRow, "Q").Value = sourceR
-        targetSheet.Cells(targetRow, "X").Value = sourceY
+    If hasAnyChange Then
+        For columnIndex = LBound(sourceMergeColumns) To UBound(sourceMergeColumns)
+            targetSheet.Cells(targetRow, targetMergeColumns(columnIndex)).Value = sourceValues(columnIndex)
+        Next columnIndex
 
-        diffSheet.Cells(diffRow, "A").Value = targetRow
-        diffSheet.Cells(diffRow, "B").Value = targetSheet.Cells(targetRow, "E").Value
-        diffSheet.Cells(diffRow, "C").Value = sourceQ
-        diffSheet.Cells(diffRow, "D").Value = sourceR
-        diffSheet.Cells(diffRow, "E").Value = sourceY
+        WriteBaseDiffColumns targetSheet, targetRow, diffSheet, diffRow, mergeConfig
+        For columnIndex = LBound(sourceMergeColumns) To UBound(sourceMergeColumns)
+            diffSheet.Cells(diffRow, diffChangedColumns(columnIndex)).Value = sourceValues(columnIndex)
+            If changedColumns(columnIndex) Then diffSheet.Cells(diffRow, diffChangedColumns(columnIndex)).Interior.Color = COLOR_YELLOW
+        Next columnIndex
 
-        If pChanged Then diffSheet.Cells(diffRow, "C").Interior.Color = COLOR_YELLOW
-        If qChanged Then diffSheet.Cells(diffRow, "D").Interior.Color = COLOR_YELLOW
-        If xChanged Then diffSheet.Cells(diffRow, "E").Interior.Color = COLOR_YELLOW
         ApplyMergeAndWriteDiff = True
     End If
 End Function
@@ -221,15 +284,37 @@ Private Sub WriteErrorDiff( _
     ByVal targetRow As Long, _
     ByVal diffSheet As Worksheet, _
     ByVal diffRow As Long, _
-    ByVal errorMessage As String)
+    ByVal errorMessage As String, _
+    ByVal mergeConfig As Object)
 
-    diffSheet.Cells(diffRow, "A").Value = targetRow
-    diffSheet.Cells(diffRow, "B").Value = targetSheet.Cells(targetRow, "E").Value
-    diffSheet.Cells(diffRow, "C").Value = targetSheet.Cells(targetRow, "P").Value
-    diffSheet.Cells(diffRow, "D").Value = targetSheet.Cells(targetRow, "Q").Value
-    diffSheet.Cells(diffRow, "E").Value = targetSheet.Cells(targetRow, "X").Value
-    diffSheet.Cells(diffRow, "F").Value = errorMessage
-    diffSheet.Cells(diffRow, "F").Interior.Color = COLOR_YELLOW
+    Dim targetMergeColumns As Variant
+    Dim diffChangedColumns As Variant
+    Dim columnIndex As Long
+
+    targetMergeColumns = mergeConfig(CONFIG_KEY_TARGET_MERGE_COLUMNS)
+    diffChangedColumns = mergeConfig(CONFIG_KEY_DIFF_CHANGED_COLUMNS)
+
+    WriteBaseDiffColumns targetSheet, targetRow, diffSheet, diffRow, mergeConfig
+    For columnIndex = LBound(targetMergeColumns) To UBound(targetMergeColumns)
+        diffSheet.Cells(diffRow, diffChangedColumns(columnIndex)).Value = targetSheet.Cells(targetRow, targetMergeColumns(columnIndex)).Value
+    Next columnIndex
+
+    diffSheet.Cells(diffRow, mergeConfig(CONFIG_KEY_DIFF_ERROR_COLUMN)).Value = errorMessage
+    diffSheet.Cells(diffRow, mergeConfig(CONFIG_KEY_DIFF_ERROR_COLUMN)).Interior.Color = COLOR_YELLOW
+End Sub
+
+Private Sub WriteBaseDiffColumns( _
+    ByVal targetSheet As Worksheet, _
+    ByVal targetRow As Long, _
+    ByVal diffSheet As Worksheet, _
+    ByVal diffRow As Long, _
+    ByVal mergeConfig As Object)
+
+    Dim diffColumns As Variant
+
+    diffColumns = mergeConfig(CONFIG_KEY_DIFF_COLUMNS)
+    diffSheet.Cells(diffRow, diffColumns(0)).Value = targetRow
+    diffSheet.Cells(diffRow, diffColumns(1)).Value = targetSheet.Cells(targetRow, mergeConfig(CONFIG_KEY_KEY_COLUMN)).Value
 End Sub
 
 Private Function LastUsedRow(ByVal worksheetToCheck As Worksheet, ByVal columnLetter As String) As Long
@@ -241,19 +326,23 @@ Private Function NormalizeKey(ByVal cellValue As Variant) As String
     NormalizeKey = Trim$(CStr(cellValue))
 End Function
 
-Private Function NormalizeNValue(ByVal cellValue As Variant) As String
-    NormalizeNValue = UCase$(Trim$(CStr(cellValue)))
+Private Function NormalizeStatusValue(ByVal cellValue As Variant) As String
+    NormalizeStatusValue = UCase$(Trim$(CStr(cellValue)))
 End Function
 
 Private Function ValuesAreDifferent(ByVal oldValue As Variant, ByVal newValue As Variant) As Boolean
     ValuesAreDifferent = (CStr(oldValue) <> CStr(newValue))
 End Function
 
-Private Sub FormatDiffSheet(ByVal diffSheet As Worksheet)
+Private Sub FormatDiffSheet(ByVal diffSheet As Worksheet, ByVal mergeConfig As Object)
+    Dim diffColumns As Variant
+
+    diffColumns = mergeConfig(CONFIG_KEY_DIFF_COLUMNS)
+
     With diffSheet
-        .Columns("A:F").AutoFit
+        .Columns(diffColumns(LBound(diffColumns)) & ":" & diffColumns(UBound(diffColumns))).AutoFit
         .Rows(HEADER_ROW).AutoFilter
         .Activate
-        .Range("A1").Select
+        .Range(diffColumns(LBound(diffColumns)) & HEADER_ROW).Select
     End With
 End Sub
